@@ -1,0 +1,72 @@
+services:
+
+  ardupilot-sitl:
+    build:
+      context: ./sitl
+      dockerfile: Dockerfile
+      args:
+        ARDUPILOT_BRANCH: master   # change to e.g. Copter-4.5 for a stable release
+
+    image: ardupilot-sitl:latest
+    container_name: ardupilot-sitl
+
+    # Run SITL on startup — override with `docker compose run` for other vehicles
+    command: tail -f /dev/null
+    # command: >
+    #   bash -lc "
+    #     source ~/venv-ardupilot/bin/activate &&
+    #     cd ~/ardupilot &&
+    #     sim_vehicle.py -v ArduCopter
+    #       --console
+    #       --map
+    #       --out=udp:0.0.0.0:14550
+    #       --out=udp:0.0.0.0:14551
+    #   "
+
+    # ------------------------------------------------------------------ ports
+    ports:
+      - "5760:5760"    # MAVLink TCP  (Mission Planner, MAVProxy TCP)
+      - "5761:5761"    # MAVLink TCP  (secondary)
+      - "14550:14550"  # MAVLink UDP  (QGroundControl default)
+      - "14551:14551"  # MAVLink UDP  (secondary GCS / companion)
+
+    # ---------------------------------------------------------------- volumes
+    volumes:
+      # X11 socket for GUI forwarding
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      # # Persist build artefacts so re-runs don't recompile from scratch
+      # - sitl-build:/home/ardupilot/ardupilot/build
+      # Optional: mount a local mission/param folder into the container
+      # - ./missions:/home/ardupilot/missions
+
+    # -------------------------------------------------------------- resources
+    # SITL is CPU-intensive during compilation; relax limits for normal use
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4G
+
+    # ------------------------------------------------------------ environment
+    environment:
+      - DISPLAY=${DISPLAY:-}          # forward X11 for --map / --console GUI
+      - TERM=xterm-256color
+
+    # ----------------------------------------------------- X11 GUI (optional)
+    # Uncomment the two lines below if you want the map/console windows
+    # to appear on your host desktop (Linux only).
+    # volumes are merged — add to the volumes block above instead of here.
+    # network_mode: host  # simplest X11 forwarding option on Linux
+    #   OR keep bridge networking and pass the socket:
+    # volumes:
+    #   - /tmp/.X11-unix:/tmp/.X11-unix:ro
+
+    stdin_open: true   # keep STDIN open (needed for MAVProxy interactive shell)
+    tty: true
+
+    restart: "no"      # SITL is a dev tool, not a daemon — don't auto-restart
+
+# -------------------------------------------------------------------- volumes
+volumes:
+  sitl-build:
+    driver: local
